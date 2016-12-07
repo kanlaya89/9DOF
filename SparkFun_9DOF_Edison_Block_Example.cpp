@@ -19,15 +19,36 @@ local, and you've found our code helpful, please buy us a round!
 Distributed as-is; no warranty is given.
 ******************************************************************************/
 
-#include "mraa.hpp"
+#include <mraa.hpp>
 
 #include <iostream>
 #include <unistd.h>
 #include "SFE_LSM9DS0.h"
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <string>
+
 using namespace std;
 
 int main()
 {
+	// setup UDP connection
+	int sock;
+	struct sockaddr_in addr;
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock < 0) {
+		std::cout << "cannot create socket";
+		return -1;
+	}
+
+	addr.sin_family = AF_INET;
+	addr.sin_port   = htons(3001);
+	addr.sin_addr.s_addr = inet_addr("192.168.11.201");
+
+
   LSM9DS0 *imu;
   imu = new LSM9DS0(0x6B, 0x1D);
   // The begin() function sets up some basic parameters and turns the device
@@ -108,7 +129,7 @@ int main()
     imu->readMag();
     imu->readGyro();
     imu->readTemp();
-
+/*
     // Print the unscaled 16-bit signed values.
     cout<<"-------------------------------------"<<endl;
     cout<<"Gyro x: "<<imu->gx<<endl;
@@ -138,8 +159,25 @@ int main()
     //  good deal of device- and system-specific calibration. The on-board
     //  temp sensor is probably best not used if local temp data is required!
     cout<<"-------------------------------------"<<endl;
-    sleep(1);
+*/
+   
+    // send UDP packet
+    const string& message {
+	string("{") + 
+	    string("\"x\": ") + to_string(imu->calcAccel(imu->ax)) + string(",") + 
+	    string("\"y\": ") + to_string(imu->calcAccel(imu->ay)) + string(",") + 
+	    string("\"z\": ") + to_string(imu->calcAccel(imu->az)) + 
+	string("}")
+    };
+    
+    sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr*)&addr, sizeof(addr));
+    //sendto(sock, "HELLO", 5, 0, (struct sockaddr*)&addr, sizeof(addr));
+    cout << "send: " << message << endl;
+   
+    usleep(500000);
   }
 
+
+	close(sock);
 	return MRAA_SUCCESS;
 }
